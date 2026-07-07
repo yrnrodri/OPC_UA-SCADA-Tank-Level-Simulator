@@ -1,0 +1,8 @@
+#!/bin/sh
+'''exec' "/home/matheusdcastro/Redes Industriais/OPC_UA-SCADA-Tank-Level-Simulator/.venv/bin/python3" "$0" "$@"
+' '''
+import sys
+from opcua.tools import uaserver
+if __name__ == '__main__':
+    sys.argv[0] = sys.argv[0].removesuffix('.exe')
+    sys.exit(uaserver())

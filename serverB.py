@@ -3,137 +3,124 @@ from datetime import datetime
 import time
 from opcua import ua
 
-# Creazione del server OPC UA
+# Criação do servidor OPC UA
 server = Server()
 server.set_endpoint("opc.tcp://0.0.0.0:4840/freeopcua/server/")
 
-# Imposta un namespace URI per evitare conflitti di nomi
-uri = "http://example.org/industria_chimica"
+# Namespace URI
+uri = "http://example.org/controle_tanques"
 idx = server.register_namespace(uri)
 
-# Aggiungi un oggetto che simula il contesto industriale
-industrial_context = server.nodes.objects.add_object(idx, "ContestoIndustriale")
+# Objeto raiz
+contexto_industrial = server.nodes.objects.add_object(idx, "ContextoIndustrial")
+servidor_unico = contexto_industrial.add_object(idx, "ServidorUnico")
 
-# Creazione dell'oggetto "Server Unico"
-server_unico = industrial_context.add_object(idx, "ServerUnico")
+# Criação dos Tanques
+tanqueA = servidor_unico.add_object(idx, "TanqueA")
+tanqueB = servidor_unico.add_object(idx, "TanqueB")
+tanqueC = servidor_unico.add_object(idx, "TanqueC")
+tanqueD = servidor_unico.add_object(idx, "TanqueD")
 
-# Creazione dei "Reattori di Sintesi"
-reattoreA = server_unico.add_object(idx, "ReattoreA")
-reattoreB = server_unico.add_object(idx, "ReattoreB")
-reattoreC = server_unico.add_object(idx, "ReattoreC")
-reattoreD = server_unico.add_object(idx, "ReattoreD")
+# Função para criar as variáveis de cada tanque
+# Variáveis por tanque (6 nós cada):
+#   Nivel, ValvolaEntrada, ValvolaSaida, Bomba, BombaVelocidade, ModalidadeOperacional
+def adicionar_variaveis_tanque(nome_pai, tanque, nivel):
+    nivel_var = tanque.add_variable(idx, f"{nome_pai}_Nivel", round(nivel, 1), datatype=ua.NodeId(ua.ObjectIds.Double))
+    nivel_var.set_writable()
+    print(f"Nó criado: {nome_pai}_Nivel -> {nivel_var.nodeid}")
 
-# Funzione per creare e aggiungere variabili ai reattori, con nome basato sul parent
-def aggiungi_variabili_reattore(parent_name, reattore, temperatura, pressione, livello):
-    temperatura_var = reattore.add_variable(idx, f"{parent_name}_Temperatura", round(temperatura, 1), datatype=ua.NodeId(ua.ObjectIds.Double))
-    temperatura_var.set_writable()
-    print(f"Creato nodo: {parent_name}_Temperatura -> {temperatura_var.nodeid}")
+    valvola_entrada_var = tanque.add_variable(idx, f"{nome_pai}_ValvolaEntrada", 0, datatype=ua.NodeId(ua.ObjectIds.Int32))
+    valvola_entrada_var.set_writable()
+    print(f"Nó criado: {nome_pai}_ValvolaEntrada -> {valvola_entrada_var.nodeid}")
 
-    pressione_var = reattore.add_variable(idx, f"{parent_name}_Pressione", round(pressione, 1), datatype=ua.NodeId(ua.ObjectIds.Double))
-    pressione_var.set_writable()
-    print(f"Creato nodo: {parent_name}_Pressione -> {pressione_var.nodeid}")
+    valvola_saida_var = tanque.add_variable(idx, f"{nome_pai}_ValvolaSaida", 0, datatype=ua.NodeId(ua.ObjectIds.Int32))
+    valvola_saida_var.set_writable()
+    print(f"Nó criado: {nome_pai}_ValvolaSaida -> {valvola_saida_var.nodeid}")
 
-    livello_var = reattore.add_variable(idx, f"{parent_name}_Livello", round(livello, 1), datatype=ua.NodeId(ua.ObjectIds.Double))
-    livello_var.set_writable()
-    print(f"Creato nodo: {parent_name}_Livello -> {livello_var.nodeid}")
+    bomba_var = tanque.add_variable(idx, f"{nome_pai}_Bomba", 0, datatype=ua.NodeId(ua.ObjectIds.Int32))
+    bomba_var.set_writable()
+    print(f"Nó criado: {nome_pai}_Bomba -> {bomba_var.nodeid}")
 
-    valvola_mandata_var = reattore.add_variable(idx, f"{parent_name}_ValvolaMandata", 0, datatype=ua.NodeId(ua.ObjectIds.Int32))
-    valvola_mandata_var.set_writable()
-    print(f"Creato nodo: {parent_name}_ValvolaMandata -> {valvola_mandata_var.nodeid}")
+    # Velocidade da bomba em % (0–100). Determina a taxa de enchimento.
+    bomba_velocidade_var = tanque.add_variable(idx, f"{nome_pai}_BombaVelocidade", 50, datatype=ua.NodeId(ua.ObjectIds.Int32))
+    bomba_velocidade_var.set_writable()
+    print(f"Nó criado: {nome_pai}_BombaVelocidade -> {bomba_velocidade_var.nodeid}")
 
-    valvola_scarico_var = reattore.add_variable(idx, f"{parent_name}_ValvolaScarico", 0, datatype=ua.NodeId(ua.ObjectIds.Int32))
-    valvola_scarico_var.set_writable()
-    print(f"Creato nodo: {parent_name}_ValvolaScarico -> {valvola_scarico_var.nodeid}")
+    modalidade_var = tanque.add_variable(idx, f"{nome_pai}_ModalidadeOperacional", True, datatype=ua.NodeId(ua.ObjectIds.Boolean))
+    modalidade_var.set_writable()
+    print(f"Nó criado: {nome_pai}_ModalidadeOperacional -> {modalidade_var.nodeid}")
 
-    camicia_riscaldamento_var = reattore.add_variable(idx, f"{parent_name}_CamiciaRiscaldamento", 0, datatype=ua.NodeId(ua.ObjectIds.Int32))
-    camicia_riscaldamento_var.set_writable()
-    print(f"Creato nodo: {parent_name}_CamiciaRiscaldamento -> {camicia_riscaldamento_var.nodeid}")
+    return nivel_var, valvola_entrada_var, valvola_saida_var, bomba_var, bomba_velocidade_var, modalidade_var
 
-    agitatore_status_var = reattore.add_variable(idx, f"{parent_name}_AgitatorStatus", False, datatype=ua.NodeId(ua.ObjectIds.Boolean))
-    agitatore_status_var.set_writable()
-    print(f"Creato nodo: {parent_name}_AgitatorStatus -> {agitatore_status_var.nodeid}")
 
-    agitatore_speed_var = reattore.add_variable(idx, f"{parent_name}_AgitatorSpeed", 0, datatype=ua.NodeId(ua.ObjectIds.Int32))
-    agitatore_speed_var.set_writable()
-    print(f"Creato nodo: {parent_name}_AgitatorSpeed -> {agitatore_speed_var.nodeid}")
+# Adiciona variáveis aos Tanques com níveis iniciais distintos
+variaveis_tanqueA = adicionar_variaveis_tanque("TanqueA", tanqueA, 8.0)
+variaveis_tanqueB = adicionar_variaveis_tanque("TanqueB", tanqueB, 9.0)
+variaveis_tanqueC = adicionar_variaveis_tanque("TanqueC", tanqueC, 6.0)
+variaveis_tanqueD = adicionar_variaveis_tanque("TanqueD", tanqueD, 7.0)
 
-    modalita_operativa_var = reattore.add_variable(idx, f"{parent_name}_ModalitaOperativa", True, datatype=ua.NodeId(ua.ObjectIds.Boolean))
-    modalita_operativa_var.set_writable()
-    print(f"Creato nodo: {parent_name}_ModalitaOperativa -> {modalita_operativa_var.nodeid}")
+# Limites do nível (em %)
+NIVEL_MIN, NIVEL_MAX = 0.0, 100.0
 
-    return temperatura_var, pressione_var, livello_var, valvola_mandata_var, valvola_scarico_var, camicia_riscaldamento_var, agitatore_status_var, agitatore_speed_var, modalita_operativa_var
+# Taxa base de enchimento/esvaziamento por ciclo de 5 s (em % absoluta do nível)
+# A taxa real de enchimento é proporcional à velocidade da bomba (0–100%).
+TAXA_SAIDA = 0.05   # 5 % do nível atual por ciclo (saída é sempre fixa pela gravidade)
 
-# Aggiungi variabili ai Reattori
-variabili_reattoreA = aggiungi_variabili_reattore("ReattoreA", reattoreA, 25.0, 2.0, 8.0)
-variabili_reattoreB = aggiungi_variabili_reattore("ReattoreB", reattoreB, 22.0, 2.5, 9.0)
-variabili_reattoreC = aggiungi_variabili_reattore("ReattoreC", reattoreC, 23.0, 1.8, 6.0)
-variabili_reattoreD = aggiungi_variabili_reattore("ReattoreD", reattoreD, 27.0, 2.8, 7.0)
 
-# Limiti delle variabili
-TEMPERATURA_MIN, TEMPERATURA_MAX = 10.0, 50.0
-PRESSIONE_MIN, PRESSIONE_MAX = 0.0, 4.0
-LIVELLO_MIN, LIVELLO_MAX = 0.0, 100.0
+def atualizar_variaveis(tanque_vars):
+    nivel, valvola_entrada, valvola_saida, bomba, bomba_velocidade, modalidade = tanque_vars
 
-# Funzione per aggiornare le variabili del reattore
-def aggiorna_variabili(reattore_vars):
-    temperatura, pressione, livello, valvola_mandata, valvola_scarico, camicia_riscaldamento, agitatore_status, agitatore_speed, modalita_operativa = reattore_vars
+    nivel_atual        = nivel.get_value()
+    bomba_ligada       = bomba.get_value() == 1
+    velocidade_pct     = max(0, min(100, bomba_velocidade.get_value()))  # clamp 0-100
+    valv_entrada_aberta = valvola_entrada.get_value() == 1
+    valv_saida_aberta   = valvola_saida.get_value() == 1
 
-    # Aggiorna Temperatura
-    camicia_on = camicia_riscaldamento.get_value() == 1
-    agitatore_on = agitatore_status.get_value()
-    if camicia_on:
-        incremento = 1.0 * (1.2 if agitatore_on else 1.0)
-        nuova_temperatura = temperatura.get_value() + incremento
+    # Taxa de enchimento proporcional à velocidade da bomba
+    # Máximo (+5 % do nível atual / ciclo a 100 % de velocidade)
+    taxa_entrada = TAXA_SAIDA * (velocidade_pct / 100.0)
+
+    if bomba_ligada and valv_entrada_aberta:
+        incremento = (nivel_atual * taxa_entrada) if nivel_atual > 0 else (2.0 * taxa_entrada)
+        novo_nivel = nivel_atual + incremento
+    elif valv_saida_aberta:
+        novo_nivel = nivel_atual - (nivel_atual * TAXA_SAIDA)
     else:
-        decremento = 1.0 * (0.8 if not agitatore_on else 1.0)
-        nuova_temperatura = temperatura.get_value() - decremento
-    nuova_temperatura = round(min(max(nuova_temperatura, TEMPERATURA_MIN), TEMPERATURA_MAX), 1)
-    temperatura.set_value(nuova_temperatura)
+        novo_nivel = nivel_atual
 
-    # Aggiorna Pressione proporzionalmente alla temperatura
-    nuova_pressione = PRESSIONE_MIN + (nuova_temperatura - TEMPERATURA_MIN) / (TEMPERATURA_MAX - TEMPERATURA_MIN) * (PRESSIONE_MAX - PRESSIONE_MIN)
-    nuova_pressione = round(nuova_pressione, 1)
-    pressione.set_value(nuova_pressione)
+    novo_nivel = round(min(max(novo_nivel, NIVEL_MIN), NIVEL_MAX), 1)
+    nivel.set_value(novo_nivel)
 
-    # Aggiorna Livello
-    if valvola_scarico.get_value() == 1:
-        nuovo_livello = livello.get_value() - (livello.get_value() * 0.05)
-    elif valvola_mandata.get_value() == 1:
-        nuovo_livello = livello.get_value() + (livello.get_value() * 0.05)
-    else:
-        nuovo_livello = livello.get_value()
-    nuovo_livello = round(min(max(nuovo_livello, LIVELLO_MIN), LIVELLO_MAX), 1)
-    livello.set_value(nuovo_livello)
 
-# Definizione della classe per il logging
+# Handler de log para mudanças OPC-UA
 class LogHandler:
     def datachange_notification(self, node, val, data):
-        print(f"[{datetime.now()}] Data Change Notification: Node: {node}, Value: {val}")
+        print(f"[{datetime.now()}] Mudança de Dado: Nó: {node}, Valor: {val}")
 
-# Avvio del server
+
+# Inicia o servidor
 server.start()
 
 try:
-    print(f"Server OPC UA avviato su {server.endpoint}")
-    print("Namespace registrati:", server.get_namespace_array())
-    
-    # Creiamo una sottoscrizione per monitorare i cambiamenti
+    print(f"Servidor OPC UA iniciado em {server.endpoint}")
+    print("Namespaces registrados:", server.get_namespace_array())
+
     handler = LogHandler()
     subscription = server.create_subscription(500, handler)
 
-    # Sottoscriviamo tutte le variabili dei reattori per monitorare cambiamenti di valore
-    for variabili in [variabili_reattoreA, variabili_reattoreB, variabili_reattoreC, variabili_reattoreD]:
-        for var in variabili:
+    for variaveis in [variaveis_tanqueA, variaveis_tanqueB, variaveis_tanqueC, variaveis_tanqueD]:
+        for var in variaveis:
             subscription.subscribe_data_change(var)
 
-    # Loop principale per aggiornare i valori ogni 5 secondi
+    # Loop principal: atualiza a cada 5 segundos
     while True:
-        for i, reattore_vars in enumerate([variabili_reattoreA, variabili_reattoreB, variabili_reattoreC, variabili_reattoreD]):
-            print(f"Aggiornamento variabili Reattore {chr(65+i)}...")
-            aggiorna_variabili(reattore_vars)
+        for i, tanque_vars in enumerate([variaveis_tanqueA, variaveis_tanqueB, variaveis_tanqueC, variaveis_tanqueD]):
+            print(f"Atualizando variáveis do Tanque {chr(65+i)}...")
+            atualizar_variaveis(tanque_vars)
         time.sleep(5)
+
 except KeyboardInterrupt:
-    print("Chiusura del server OPC UA...")
+    print("Encerrando o servidor OPC UA...")
 finally:
     server.stop()
-    print("Server fermato.")
+    print("Servidor encerrado.")

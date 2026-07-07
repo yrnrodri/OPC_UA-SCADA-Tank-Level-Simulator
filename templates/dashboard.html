@@ -1,18 +1,15 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Chemical Plant SCADA</title>
+    <title>SCADA – Simulador de Nível de Tanques</title>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css"
     />
     <style>
-      /* Stile generale */
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
 
       body {
         background-image: url('{{ url_for("static", filename="images/back_industrial.webp") }}');
@@ -43,25 +40,22 @@
         margin: 10px;
         border-radius: 8px;
         box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-        width: 250px;
+        width: 260px;
         text-align: center;
         transition: transform 0.3s ease, box-shadow 0.3s ease;
-        min-height: 600px;
       }
 
-      .sensor-card.agitatore-attivo {
-        border-color: #7fff45; /* Bordo verde */
-      }
-
-      .sensor-card.riscaldamento-acceso {
-        box-shadow: 0 0px 30px red;
+      /* Destaque visual quando a bomba está ligada */
+      .sensor-card.bomba-ligada {
+        border-color: #00bfff;
+        box-shadow: 0 0 22px #00bfff99;
       }
 
       .button-section {
         display: flex;
         justify-content: center;
         gap: 10px;
-        margin-top: 10px;
+        margin-top: 8px;
       }
 
       button {
@@ -75,283 +69,191 @@
         min-width: 70px;
       }
 
-      .on {
-        background-color: lime;
-        color: black;
-      }
+      .on  { background-color: lime; color: black; }
+      .off { background-color: red;  color: white; }
 
-      .off {
-        background-color: red;
-        color: white;
-      }
+      button:hover { opacity: 0.8; }
 
-      button:hover {
-        opacity: 0.8;
-      }
-
-      input {
+      input[type="number"] {
         font-size: 12px;
         margin-top: 5px;
+        width: 70px;
+        text-align: center;
       }
+
+      /* Barra de nível */
+      .nivel-barra-container {
+        width: 100%;
+        background: #ddd;
+        border-radius: 6px;
+        height: 16px;
+        margin: 6px 0 4px;
+        border: 1px solid #999;
+        overflow: hidden;
+      }
+      .nivel-barra {
+        height: 100%;
+        background: linear-gradient(to right, #2196f3, #00bcd4);
+        border-radius: 6px;
+        transition: width 0.5s ease;
+      }
+
+
+
+      label { font-size: 12px; }
     </style>
   </head>
   <body>
-    <h1>SCADA Reattori Impianto Chimico</h1>
+    <h1>SCADA – Controle de Nível de Tanques</h1>
     <div class="sensor-container" id="sensor-container">
-      {% for reattore, dati in variabili_reattori.items() %}
-      <div class="sensor-card" id="card-{{ reattore }}">
-        <h2>{{ reattore }}</h2>
-        <p>
-          <strong>Temperatura:</strong>
-          <span class="temperatura"></span> °C
-        </p>
-        <p>
-          <strong>Pressione:</strong>
-          <span class="pressione"></span> bar
-        </p>
-        <p>
-          <strong>Livello:</strong>
-          <span class="livello"></span> %
-        </p>
+      {% for tanque, dados in variaveis_tanques.items() %}
+      <div class="sensor-card" id="card-{{ tanque }}">
+        <h2>{{ tanque }}</h2>
 
-        <!-- Valvola Mandata -->
-        <p>
-          <strong>Valvola Mandata:</strong>
-          <span class="valvola-mandata"></span>
-        </p>
+        <!-- Nível -->
+        <p><strong>Nível:</strong> <span class="nivel">{{ dados.Nivel }}</span> %</p>
+        <div class="nivel-barra-container">
+          <div class="nivel-barra" style="width: {{ dados.Nivel }}%"></div>
+        </div>
+
+        <!-- Válvula de Entrada -->
+        <p><strong>Válvula de Entrada:</strong> <span class="valvola-entrada"></span></p>
         <div class="button-section">
-          {% if dati.ValvolaMandata == 0 %}
-          <form action="/ValvolaMandata_{{ reattore }}" method="POST">
-            <input type="hidden" name="valore" value="1" />
-            <button type="submit" class="on">Apri</button>
+          {% if dados.ValvolaEntrada == 0 %}
+          <form action="/ValvolaEntrada_{{ tanque }}" method="POST">
+            <input type="hidden" name="valor" value="1" />
+            <button type="submit" class="on">Abrir</button>
           </form>
           {% else %}
-          <form action="/ValvolaMandata_{{ reattore }}" method="POST">
-            <input type="hidden" name="valore" value="0" />
-            <button type="submit" class="off">Chiudi</button>
+          <form action="/ValvolaEntrada_{{ tanque }}" method="POST">
+            <input type="hidden" name="valor" value="0" />
+            <button type="submit" class="off">Fechar</button>
           </form>
           {% endif %}
         </div>
 
-        <!-- Valvola Scarico -->
-        <p>
-          <strong>Valvola Scarico:</strong>
-          <span class="valvola-scarico"></span>
-        </p>
+        <!-- Válvula de Saída -->
+        <p><strong>Válvula de Saída:</strong> <span class="valvola-saida"></span></p>
         <div class="button-section">
-          {% if dati.ValvolaScarico == 0 %}
-          <form action="/ValvolaScarico_{{ reattore }}" method="POST">
-            <input type="hidden" name="valore" value="1" />
-            <button type="submit" class="on">Apri</button>
+          {% if dados.ValvolaSaida == 0 %}
+          <form action="/ValvolaSaida_{{ tanque }}" method="POST">
+            <input type="hidden" name="valor" value="1" />
+            <button type="submit" class="on">Abrir</button>
           </form>
           {% else %}
-          <form action="/ValvolaScarico_{{ reattore }}" method="POST">
-            <input type="hidden" name="valore" value="0" />
-            <button type="submit" class="off">Chiudi</button>
+          <form action="/ValvolaSaida_{{ tanque }}" method="POST">
+            <input type="hidden" name="valor" value="0" />
+            <button type="submit" class="off">Fechar</button>
           </form>
           {% endif %}
         </div>
 
-        <!-- Riscaldamento -->
-        <p>
-          <strong>Riscaldamento:</strong>
-          <span class="riscaldamento"></span>
-        </p>
+        <!-- Bomba (Liga/Desliga) -->
+        <p><strong>Bomba:</strong> <span class="bomba"></span></p>
         <div class="button-section">
-          {% if dati.CamiciaRiscaldamento == 0 %}
-          <form action="/CamiciaRiscaldamento_{{ reattore }}" method="POST">
-            <input type="hidden" name="valore" value="1" />
-            <button type="submit" class="on">ON</button>
+          {% if dados.Bomba == 0 %}
+          <form action="/Bomba_{{ tanque }}" method="POST">
+            <input type="hidden" name="valor" value="1" />
+            <button type="submit" class="on">Ligar</button>
           </form>
           {% else %}
-          <form action="/CamiciaRiscaldamento_{{ reattore }}" method="POST">
-            <input type="hidden" name="valore" value="0" />
-            <button type="submit" class="off">OFF</button>
+          <form action="/Bomba_{{ tanque }}" method="POST">
+            <input type="hidden" name="valor" value="0" />
+            <button type="submit" class="off">Desligar</button>
           </form>
           {% endif %}
         </div>
 
-        <!-- Agitatore -->
+        <!-- Velocidade da Bomba -->
         <p>
-          <strong>Agitatore:</strong>
-          <span class="agitator-status"></span>
+          <strong>Velocidade da Bomba:</strong>
+          <span class="bomba-velocidade">{{ dados.BombaVelocidade }}</span> %
         </p>
-        <div class="button-section">
-          {% if not dati.AgitatorStatus %}
-          <form action="/AgitatorStatus_{{ reattore }}" method="POST">
-            <input type="hidden" name="valore" value="true" />
-            <button type="submit" class="on">ON</button>
-          </form>
-          {% else %}
-          <form action="/AgitatorStatus_{{ reattore }}" method="POST">
-            <input type="hidden" name="valore" value="false" />
-            <button type="submit" class="off">OFF</button>
-          </form>
-          {% endif %}
-        </div>
-
-        <!-- Velocità Agitatore -->
-        <p>
-          <strong>Velocità Agitatore:</strong>
-          <span class="agitator-speed"></span> RPM
-        </p>
-        <form
-          action="/AgitatorSpeed_{{ reattore }}"
-          method="POST"
-          style="display: inline-block"
-          onsubmit="return validateForm(event)"
-        >
-          <input
-            type="number"
-            id="valore"
-            name="valore"
-            min="10"
-            max="300"
-            value=""
-          />
-          <button type="submit">Imposta</button>
+        <form action="/BombaVelocidade_{{ tanque }}" method="POST"
+              style="display:inline-block"
+              onsubmit="return validarFormulario(event)">
+          <label>
+            <input
+              type="number"
+              name="valor"
+              min="0"
+              max="100"
+              value="{{ dados.BombaVelocidade }}"
+              class="campo-velocidade-{{ tanque }}"
+            /> %
+          </label>
+          <button type="submit">Definir</button>
         </form>
-        <!-- Controllo modalità automatico/manuale -->
-        <p>
-          <strong>Mod:</strong>
-          <span class="modalita-operativa"></span>
-        </p>
+
+        <!-- Modalidade Operacional -->
+        <p><strong>Modalidade:</strong> <span class="modalidade-operacional"></span></p>
         <div class="button-section">
-          {% if dati.ModalitaOperativa == True %}
-          <form action="/CambiaModalita/{{ reattore }}" method="POST">
-            <input type="hidden" name="modalita" value="manuale" />
-            <button type="submit" class="off">MAN Mode</button>
+          {% if dados.ModalidadeOperacional == True %}
+          <form action="/AlterarModalidade/{{ tanque }}" method="POST">
+            <input type="hidden" name="modalidade" value="manual" />
+            <button type="submit" class="off">Modo MAN</button>
           </form>
           {% else %}
-          <form action="/CambiaModalita/{{ reattore }}" method="POST">
-            <input type="hidden" name="modalita" value="automatico" />
-            <button type="submit" class="on">AUTO Mode</button>
+          <form action="/AlterarModalidade/{{ tanque }}" method="POST">
+            <input type="hidden" name="modalidade" value="automatico" />
+            <button type="submit" class="on">Modo AUTO</button>
           </form>
           {% endif %}
         </div>
       </div>
-
       {% endfor %}
     </div>
+
     <script>
-      // Aggiorna dinamicamente i dati dei reattori
-      async function aggiornaDati() {
+      // Atualiza dinamicamente os dados dos tanques a cada 2 segundos
+      async function atualizarDados() {
         try {
-          // Effettua una richiesta all'API per ottenere i dati aggiornati
-          const response = await fetch("/api/reattori");
-          if (!response.ok) throw new Error("Errore nella risposta del server");
+          const resposta = await fetch("/api/tanques");
+          if (!resposta.ok) throw new Error("Erro na resposta do servidor");
 
-          const dati = await response.json(); // Dati ricevuti dall'API
-          console.log(dati);
+          const dados = await resposta.json();
 
-          // Itera su ciascun reattore e aggiorna le classi e i contenuti del DOM
-          for (const [reattore, valori] of Object.entries(dati)) {
-            // Seleziona la card del reattore
-            const card = document.querySelector(`#card-${reattore}`);
-            if (card) {
-              // Aggiorna i contenuti del DOM
-              card.querySelector(".temperatura").textContent =
-                valori.Temperatura;
-              card.querySelector(".pressione").textContent = valori.Pressione;
-              card.querySelector(".livello").textContent = valori.Livello;
-              card.querySelector(".valvola-mandata").textContent =
-                valori.ValvolaMandata === 1 ? "Aperta" : "Chiusa";
-              card.querySelector(".valvola-scarico").textContent =
-                valori.ValvolaScarico === 1 ? "Aperta" : "Chiusa";
-              card.querySelector(".riscaldamento").textContent =
-                valori.CamiciaRiscaldamento === 1 ? "Acceso" : "Spento";
-              card.querySelector(".agitator-status").textContent =
-                valori.AgitatorStatus ? "Acceso" : "Spento";
-              card.querySelector(".agitator-speed").textContent =
-                valori.AgitatorSpeed;
-              card.querySelector(".modalita-operativa").textContent =
-                valori.ModalitaOperativa ? "Auto" : "Man";
+          for (const [tanque, valores] of Object.entries(dados)) {
+            const card = document.querySelector(`#card-${tanque}`);
+            if (!card) continue;
 
-              // Aggiorna dinamicamente le classi CSS
-              card.classList.toggle("agitatore-attivo", valori.AgitatorStatus);
-              card.classList.toggle(
-                "riscaldamento-acceso",
-                valori.CamiciaRiscaldamento === 1
-              );
-            }
+            // Textos
+            card.querySelector(".nivel").textContent          = valores.Nivel;
+            card.querySelector(".valvola-entrada").textContent =
+              valores.ValvolaEntrada === 1 ? "Aberta" : "Fechada";
+            card.querySelector(".valvola-saida").textContent  =
+              valores.ValvolaSaida === 1 ? "Aberta" : "Fechada";
+            card.querySelector(".bomba").textContent          =
+              valores.Bomba === 1 ? "Ligada" : "Desligada";
+            card.querySelector(".bomba-velocidade").textContent = valores.BombaVelocidade;
+            card.querySelector(".modalidade-operacional").textContent =
+              valores.ModalidadeOperacional ? "Automático" : "Manual";
+
+            // Barra de nível
+            const barraNivel = card.querySelector(".nivel-barra");
+            if (barraNivel) barraNivel.style.width = `${valores.Nivel}%`;
+
+            // Destaque visual quando a bomba está ligada
+            card.classList.toggle("bomba-ligada", valores.Bomba === 1);
           }
-        } catch (error) {
-          console.error("Errore durante l'aggiornamento dei dati:", error);
-          alert(
-            "Errore di rete: impossibile aggiornare i dati. Controlla la connessione."
-          );
+        } catch (erro) {
+          console.error("Erro ao atualizar dados:", erro);
         }
       }
 
-      // Cambia la modalità operativa di un reattore
-      async function cambiaModalita(reattore, modalita) {
-        try {
-          const response = await fetch(`/CambiaModalita/${reattore}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/x-www-form-urlencoded" },
-            body: new URLSearchParams({ modalita: modalita }), // Invia i dati come form
-          });
-
-          const data = await response.json();
-          if (response.ok) {
-            // Aggiorna il frontend con il nuovo stato
-            const card = document.querySelector(`#card-${reattore}`);
-            if (card) {
-              card.querySelector(".modalita-operativa").textContent =
-                modalita === "automatico" ? "Automatico" : "Manuale";
-            }
-            alert(data.message); // Mostra il messaggio di successo
-          } else {
-            // Mostra l'errore
-            console.error(data.error);
-            alert(`Errore: ${data.error}`);
-          }
-        } catch (error) {
-          console.error("Errore durante il cambio di modalità:", error);
-          alert("Errore di rete: impossibile cambiare modalità.");
+      function validarFormulario(event) {
+        const form  = event.target;
+        const input = form.querySelector("input[type='number']");
+        const val   = parseInt(input.value, 10);
+        if (isNaN(val) || val < 0 || val > 100) {
+          alert("Informe um valor de velocidade entre 0 e 100 %.");
+          return false;
         }
+        return true;
       }
 
-      // Invia un'azione al backend
-      async function inviaAzione(url, body) {
-        const button = event.target;
-        button.disabled = true; // Disabilita il bottone durante l'operazione
-        try {
-          const response = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-
-          const data = await response.json();
-          if (data.error) {
-            console.error(data.error);
-            alert(`Errore: ${data.error}`);
-          } else {
-            console.log(data.message);
-          }
-        } catch (error) {
-          console.error("Errore durante l'invio dell'azione:", error);
-          alert("Errore di rete: impossibile eseguire l'azione.");
-        } finally {
-          button.disabled = false; // Riabilita il bottone al termine
-        }
-      }
-
-      // Esegui l'aggiornamento iniziale e poi periodicamente ogni 2 secondi
-      aggiornaDati();
-      setInterval(aggiornaDati, 2000);
-    </script>
-    <script>
-      function validateForm(event) {
-        const inputField = document.getElementById("valore");
-        if (!inputField.value.trim()) {
-          alert("Il campo non può essere vuoto!");
-          return false; // Previene il submit del form
-        }
-        return true; // Permette il submit se il campo non è vuoto
-      }
+      atualizarDados();
+      setInterval(atualizarDados, 2000);
     </script>
   </body>
 </html>
-

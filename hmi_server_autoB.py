@@ -5,252 +5,206 @@ import time
 import threading
 from threading import Event, Lock
 
-# Configurazione del logging per facilitare il debug
 logging.basicConfig(level=logging.WARNING)
 
 app = Flask(__name__, static_folder='static')
 
-# Connessione al server OPC UA
+# Conexão com o servidor OPC UA
 client = Client("opc.tcp://localhost:4840/freeopcua/server/")
 client.connect()
 
-
-# Identificatori dei nodi OPC UA (mappati manualmente dai dati del server)
+# Mapeamento dos nós OPC UA
+# 6 nós por tanque a partir de i=7:
+#   Nivel, ValvolaEntrada, ValvolaSaida, Bomba, BombaVelocidade, ModalidadeOperacional
 node_ids = {
-    "ReattoreA": {
-        "Temperatura": "ns=2;i=7",
-        "Pressione": "ns=2;i=8",
-        "Livello": "ns=2;i=9",
-        "ValvolaMandata": "ns=2;i=10",
-        "ValvolaScarico": "ns=2;i=11",
-        "CamiciaRiscaldamento": "ns=2;i=12",
-        "AgitatorStatus": "ns=2;i=13",
-        "AgitatorSpeed": "ns=2;i=14",
-        "ModalitaOperativa": "ns=2;i=15",
+    "TanqueA": {
+        "Nivel":                  "ns=2;i=7",
+        "ValvolaEntrada":         "ns=2;i=8",
+        "ValvolaSaida":           "ns=2;i=9",
+        "Bomba":                  "ns=2;i=10",
+        "BombaVelocidade":        "ns=2;i=11",
+        "ModalidadeOperacional":  "ns=2;i=12",
     },
-    "ReattoreB": {
-        "Temperatura": "ns=2;i=16",
-        "Pressione": "ns=2;i=17",
-        "Livello": "ns=2;i=18",
-        "ValvolaMandata": "ns=2;i=19",
-        "ValvolaScarico": "ns=2;i=20",
-        "CamiciaRiscaldamento": "ns=2;i=21",
-        "AgitatorStatus": "ns=2;i=22",
-        "AgitatorSpeed": "ns=2;i=23",
-        "ModalitaOperativa": "ns=2;i=24",
+    "TanqueB": {
+        "Nivel":                  "ns=2;i=13",
+        "ValvolaEntrada":         "ns=2;i=14",
+        "ValvolaSaida":           "ns=2;i=15",
+        "Bomba":                  "ns=2;i=16",
+        "BombaVelocidade":        "ns=2;i=17",
+        "ModalidadeOperacional":  "ns=2;i=18",
     },
-    "ReattoreC": {
-        "Temperatura": "ns=2;i=25",
-        "Pressione": "ns=2;i=26",
-        "Livello": "ns=2;i=27",
-        "ValvolaMandata": "ns=2;i=28",
-        "ValvolaScarico": "ns=2;i=29",
-        "CamiciaRiscaldamento": "ns=2;i=30",
-        "AgitatorStatus": "ns=2;i=31",
-        "AgitatorSpeed": "ns=2;i=32",
-        "ModalitaOperativa": "ns=2;i=33",
+    "TanqueC": {
+        "Nivel":                  "ns=2;i=19",
+        "ValvolaEntrada":         "ns=2;i=20",
+        "ValvolaSaida":           "ns=2;i=21",
+        "Bomba":                  "ns=2;i=22",
+        "BombaVelocidade":        "ns=2;i=23",
+        "ModalidadeOperacional":  "ns=2;i=24",
     },
-    "ReattoreD": {
-        "Temperatura": "ns=2;i=34",
-        "Pressione": "ns=2;i=35",
-        "Livello": "ns=2;i=36",
-        "ValvolaMandata": "ns=2;i=37",
-        "ValvolaScarico": "ns=2;i=38",
-        "CamiciaRiscaldamento": "ns=2;i=39",
-        "AgitatorStatus": "ns=2;i=40",
-        "AgitatorSpeed": "ns=2;i=41",
-        "ModalitaOperativa": "ns=2;i=42",
+    "TanqueD": {
+        "Nivel":                  "ns=2;i=25",
+        "ValvolaEntrada":         "ns=2;i=26",
+        "ValvolaSaida":           "ns=2;i=27",
+        "Bomba":                  "ns=2;i=28",
+        "BombaVelocidade":        "ns=2;i=29",
+        "ModalidadeOperacional":  "ns=2;i=30",
     },
 }
 
-# Stato operativo per ogni reattore (True = Automatico, False = Manuale)
-stati_reattori = {
-    "ReattoreA": True,
-    "ReattoreB": True,
-    "ReattoreC": True,
-    "ReattoreD": True,
-}
+# Estado operacional de cada tanque (True = Automático, False = Manual)
+estados_tanques = {t: True for t in node_ids}
 
-# Flag di terminazione per i thread
-stop_flags = {
-    "ReattoreA": Event(),
-    "ReattoreB": Event(),
-    "ReattoreC": Event(),
-    "ReattoreD": Event(),
-}
+# Flags de parada para os threads automáticos
+flags_parada = {t: Event() for t in node_ids}
 
-# Lock per sincronizzare automazione e operazioni manuali
-locks = {
-    "ReattoreA": Lock(),
-    "ReattoreB": Lock(),
-    "ReattoreC": Lock(),
-    "ReattoreD": Lock(),
-}
+# Locks para sincronizar automação e operações manuais
+locks = {t: Lock() for t in node_ids}
 
-# E' sufficiente fare solo il rendering dell'html in quanto in contenuti si aggiornano manualmente
+
 @app.route('/')
 def index():
     try:
-        # Recupera i valori di ciascun reattore
-        variabili_reattori = {}
-        for reattore, variabili in node_ids.items():
-            variabili_reattori[reattore] = {
-                nome: client.get_node(nodo).get_value()
-                for nome, nodo in variabili.items()
+        variaveis_tanques = {}
+        for tanque, variaveis in node_ids.items():
+            variaveis_tanques[tanque] = {
+                nome: client.get_node(no).get_value()
+                for nome, no in variaveis.items()
             }
-
-        # Passa i dati al template HTML
-        print(variabili_reattori)
-        return render_template('dashboard.html', variabili_reattori=variabili_reattori)
-
+        return render_template('dashboard.html', variaveis_tanques=variaveis_tanques)
     except Exception as e:
-        logging.error(f"Errore durante l'accesso al server OPC UA: {e}")
-        return "Si è verificato un errore durante la connessione al server OPC UA.", 500
+        logging.error(f"Erro ao acessar o servidor OPC UA: {e}")
+        return "Erro ao conectar ao servidor OPC UA.", 500
 
 
-@app.route('/api/reattori', methods=['GET'])
-def api_reattori():
+@app.route('/api/tanques', methods=['GET'])
+def api_tanques():
     try:
-        variabili_reattori = {}
-        for reattore, variabili in node_ids.items():
-            variabili_reattori[reattore] = {
-                nome: client.get_node(nodo).get_value()
-                for nome, nodo in variabili.items()
+        variaveis_tanques = {}
+        for tanque, variaveis in node_ids.items():
+            variaveis_tanques[tanque] = {
+                nome: client.get_node(no).get_value()
+                for nome, no in variaveis.items()
             }
-            # Aggiungi lo stato operativo (automatico/manuale)
-            variabili_reattori[reattore]['ModalitaOperativa'] = stati_reattori[reattore]
-        return jsonify(variabili_reattori)
+            variaveis_tanques[tanque]['ModalidadeOperacional'] = estados_tanques[tanque]
+        return jsonify(variaveis_tanques)
     except Exception as e:
-        logging.error(f"Errore durante il recupero dei dati dei reattori: {e}")
-        return jsonify({"error": "Errore nel recupero dei dati"}), 500
+        logging.error(f"Erro ao buscar dados dos tanques: {e}")
+        return jsonify({"error": "Erro ao buscar dados"}), 500
 
 
-@app.route('/<azione>_<reattore>', methods=['POST'])
-def gestisci_variabile(azione, reattore):
-    print(azione)
-    print(reattore)
+@app.route('/<acao>_<tanque>', methods=['POST'])
+def gerenciar_variavel(acao, tanque):
     try:
-        with locks[reattore]:  # Blocca l'accesso durante l'operazione manuale
-            nodo_id = node_ids[reattore][azione]
-            nodo = client.get_node(nodo_id)
-            nuovo_valore = request.form['valore']  # Riceve il valore dal form
+        with locks[tanque]:
+            no_id = node_ids[tanque][acao]
+            no = client.get_node(no_id)
+            novo_valor = request.form['valor']
 
-            # Conversione del valore in base all'azione
-            if azione in ['ValvolaMandata', 'ValvolaScarico', 'CamiciaRiscaldamento']:
-                nuovo_valore = int(nuovo_valore)
-            elif azione == 'AgitatorStatus':
-                nuovo_valore = nuovo_valore.lower() == 'true'
-            elif azione == 'AgitatorSpeed':
-                nuovo_valore = int(nuovo_valore)
+            if acao in ['ValvolaEntrada', 'ValvolaSaida', 'Bomba']:
+                novo_valor = int(novo_valor)
+            elif acao == 'BombaVelocidade':
+                novo_valor = max(0, min(100, int(novo_valor)))
             else:
-                raise ValueError(f"Azione '{azione}' non valida.")
+                raise ValueError(f"Ação '{acao}' inválida.")
 
-            # Imposta il valore nel nodo OPC UA
-            nodo.set_value(nuovo_valore)
-            logging.info(f"Variabile {azione} del {reattore} impostata a {nuovo_valore}.")
+            no.set_value(novo_valor)
+            logging.info(f"Variável {acao} do {tanque} definida para {novo_valor}.")
 
-        # Dopo l'operazione, rimanda alla dashboard
         return redirect(url_for('index'))
-        
 
     except Exception as e:
-        logging.error(f"Errore durante l'aggiornamento della variabile {azione} per {reattore}: {e}")
-        return "Si è verificato un errore durante l'aggiornamento dei valori", 500
+        logging.error(f"Erro ao atualizar '{acao}' do {tanque}: {e}")
+        return "Erro ao atualizar o valor.", 500
 
 
-
-@app.route('/CambiaModalita/<reattore>', methods=['POST'])
-def cambia_modalita(reattore):
+@app.route('/AlterarModalidade/<tanque>', methods=['POST'])
+def alterar_modalidade(tanque):
     try:
-        modalita = request.form['modalita']  # 'automatico' o 'manuale'
-        if reattore not in stati_reattori:
-            return jsonify({"error": "Reattore non valido"}), 400
+        modalidade = request.form['modalidade']
+        if tanque not in estados_tanques:
+            return jsonify({"error": "Tanque inválido"}), 400
 
-        if modalita.lower() == 'automatico':
-            stati_reattori[reattore] = True
-            stop_flags[reattore].clear()  # Riabilita il ciclo automatico
-            threading.Thread(target=ciclo_reattore, args=(reattore,), daemon=True).start()
-            nodo_id = node_ids[reattore]["ModalitaOperativa"]
-            nodo = client.get_node(nodo_id)
-            nodo.set_value(True)
-            logging.info(f"Modalità del {reattore} impostata a automatico.")
-        elif modalita.lower() == 'manuale':
-            stati_reattori[reattore] = False
-            stop_flags[reattore].set()  # Termina il thread automatico
-            nodo_id = node_ids[reattore]["ModalitaOperativa"]
-            nodo = client.get_node(nodo_id)
-            nodo.set_value(False)
-            logging.info(f"Modalità del {reattore} impostata a manuale.")
+        if modalidade.lower() == 'automatico':
+            estados_tanques[tanque] = True
+            flags_parada[tanque].clear()
+            threading.Thread(target=ciclo_tanque, args=(tanque,), daemon=True).start()
+            client.get_node(node_ids[tanque]["ModalidadeOperacional"]).set_value(True)
+            logging.info(f"Modalidade do {tanque} definida para Automático.")
+        elif modalidade.lower() == 'manual':
+            estados_tanques[tanque] = False
+            flags_parada[tanque].set()
+            client.get_node(node_ids[tanque]["ModalidadeOperacional"]).set_value(False)
+            logging.info(f"Modalidade do {tanque} definida para Manual.")
         else:
             return redirect(url_for('index'))
 
-        # Restituisci una risposta JSON per aggiornare il frontend
         return redirect(url_for('index'))
 
     except Exception as e:
-        logging.error(f"Errore durante il cambio di modalità per {reattore}: {e}")
-        return jsonify({"error": "Errore nel cambio di modalità"}), 500
+        logging.error(f"Erro ao alterar modalidade do {tanque}: {e}")
+        return jsonify({"error": "Erro ao alterar modalidade"}), 500
 
 
-
-def ciclo_reattore(reattore):
+def ciclo_tanque(tanque):
     """
-    Simula il ciclo di operazioni per un singolo reattore.
+    Ciclo de controle automático do nível do tanque.
+
+    Etapas:
+      1. Reset de todos os atuadores (bomba desligada, velocidade 50 %, válvulas fechadas).
+      2. Enchimento: liga a bomba (velocidade 80 %) + abre válvula de entrada → aguarda Nível >= 90 %.
+      3. Esvaziamento: desliga bomba, abre válvula de saída → aguarda Nível <= 5 %.
+      4. Pausa de 10 s e recomeça o ciclo.
     """
     try:
-        logging.info(f"Avvio del ciclo per il reattore {reattore}.")
-        while True:
-            # Nodi OPC UA
-            valvola_mandata = client.get_node(node_ids[reattore]["ValvolaMandata"])
-            valvola_scarico = client.get_node(node_ids[reattore]["ValvolaScarico"])
-            camicia_riscaldamento = client.get_node(node_ids[reattore]["CamiciaRiscaldamento"])
-            agitatore_status = client.get_node(node_ids[reattore]["AgitatorStatus"])
-            agitatore_speed = client.get_node(node_ids[reattore]["AgitatorSpeed"])
-            livello = client.get_node(node_ids[reattore]["Livello"])
-            temperatura = client.get_node(node_ids[reattore]["Temperatura"])
-            
+        logging.info(f"Iniciando ciclo automático do {tanque}.")
+        while not flags_parada[tanque].is_set():
+            valvola_entrada  = client.get_node(node_ids[tanque]["ValvolaEntrada"])
+            valvola_saida    = client.get_node(node_ids[tanque]["ValvolaSaida"])
+            bomba            = client.get_node(node_ids[tanque]["Bomba"])
+            bomba_velocidade = client.get_node(node_ids[tanque]["BombaVelocidade"])
+            nivel            = client.get_node(node_ids[tanque]["Nivel"])
 
-            # Step 1: Resetta
-            valvola_mandata.set_value(0)
-            valvola_scarico.set_value(0)
-            camicia_riscaldamento.set_value(0)
-            agitatore_speed.set_value(0)
-            agitatore_status.set_value(False)
+            # --- Passo 1: Reset ---
+            valvola_entrada.set_value(0)
+            valvola_saida.set_value(0)
+            bomba.set_value(0)
+            bomba_velocidade.set_value(50)
 
-            # Step 2: Inizia il riempimento
-            agitatore_speed.set_value(60)
-            agitatore_status.set_value(True)
-            valvola_mandata.set_value(1)
-            while livello.get_value() < 90.0:
+            # --- Passo 2: Enchimento ---
+            bomba_velocidade.set_value(80)
+            bomba.set_value(1)
+            valvola_entrada.set_value(1)
+            while nivel.get_value() < 90.0:
+                if flags_parada[tanque].is_set():
+                    return
                 time.sleep(1)
-            valvola_mandata.set_value(0)
+            valvola_entrada.set_value(0)
+            bomba.set_value(0)
+            bomba_velocidade.set_value(0)
 
-            # Step 3: Riscalda
-            camicia_riscaldamento.set_value(1)
-            while temperatura.get_value() < 40.0:
+            # --- Passo 3: Esvaziamento ---
+            valvola_saida.set_value(1)
+            while nivel.get_value() > 5.0:
+                if flags_parada[tanque].is_set():
+                    return
                 time.sleep(1)
-            camicia_riscaldamento.set_value(0)
-            
+            valvola_saida.set_value(0)
 
-            # Step 4: Scarico
-            while temperatura.get_value() > 20.0:
-                time.sleep(1)
-            agitatore_speed.set_value(30)
-            valvola_scarico.set_value(1)
-            while livello.get_value() > 5.0:
-                time.sleep(1)
-            valvola_scarico.set_value(0)
-            agitatore_status.set_value(False)
-            agitatore_speed.set_value(0)
+            # --- Pausa antes de reiniciar ---
             time.sleep(10)
 
     except Exception as e:
-        logging.error(f"Errore nel ciclo del reattore {reattore}: {e}")
+        logging.error(f"Erro no ciclo do {tanque}: {e}")
 
 
-# Avvia automazione indipendente
-threading.Thread(target=lambda: [threading.Thread(target=ciclo_reattore, args=(r,), daemon=True).start() for r in node_ids.keys()], daemon=True).start()
+# Inicia ciclos automáticos para todos os tanques na inicialização
+threading.Thread(
+    target=lambda: [
+        threading.Thread(target=ciclo_tanque, args=(t,), daemon=True).start()
+        for t in node_ids.keys()
+    ],
+    daemon=True
+).start()
 
 if __name__ == "__main__":
     app.run(debug=True)
-
