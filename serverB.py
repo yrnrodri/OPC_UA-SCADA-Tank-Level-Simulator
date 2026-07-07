@@ -64,7 +64,7 @@ NIVEL_MIN, NIVEL_MAX = 0.0, 100.0
 
 # Taxa base de enchimento/esvaziamento por ciclo de 5 s (em % absoluta do nível)
 # A taxa real de enchimento é proporcional à velocidade da bomba (0–100%).
-TAXA_SAIDA = 0.05   # 5 % do nível atual por ciclo (saída é sempre fixa pela gravidade)
+TAXA_SAIDA = 0.025   # 2,5 % do nível atual por ciclo (saída é sempre fixa pela gravidade)
 
 
 def atualizar_variaveis(tanque_vars):
@@ -77,12 +77,16 @@ def atualizar_variaveis(tanque_vars):
     valv_saida_aberta   = valvola_saida.get_value() == 1
 
     # Taxa de enchimento proporcional à velocidade da bomba
-    # Máximo (+5 % do nível atual / ciclo a 100 % de velocidade)
-    taxa_entrada = TAXA_SAIDA * (velocidade_pct / 100.0)
+    # Máximo (+10 % do nível atual / ciclo a 100 % de velocidade)
+    taxa_entrada = 2 * TAXA_SAIDA * (velocidade_pct / 100.0)
 
     if bomba_ligada and valv_entrada_aberta:
         incremento = (nivel_atual * taxa_entrada) if nivel_atual > 0 else (2.0 * taxa_entrada)
         novo_nivel = nivel_atual + incremento
+
+        if valv_saida_aberta:
+            novo_nivel -= (nivel_atual * TAXA_SAIDA)
+            
     elif valv_saida_aberta:
         novo_nivel = nivel_atual - (nivel_atual * TAXA_SAIDA)
     else:
